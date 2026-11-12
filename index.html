@@ -24,7 +24,7 @@
       padding:8px 14px 12px;background:#152239;border-top:1px solid var(--line);color:#fff}
     .media-controls .seek{width:100%;height:18px;min-width:0;cursor:pointer;accent-color:#56adff}
     /* 固定 6 列，播放/暂停及全屏状态变化不会引起控件换行。 */
-    .media-actions{display:grid;grid-template-columns:42px max-content 40px minmax(36px,1fr) 68px 48px;
+    .media-actions{display:grid;grid-template-columns:42px max-content minmax(36px,1fr) 68px 48px;
       align-items:center;gap:8px;min-height:40px}
     .media-actions button,.media-actions select{font:inherit;cursor:pointer;padding:5px 4px;background:#101b2d;
       border:1px solid #ffffff55;border-radius:7px;color:#fff;min-height:40px;min-width:0;width:100%}
@@ -50,15 +50,15 @@
     body.lock-scroll{overflow:hidden}
     @media(max-width:520px){
       .media-controls{padding:8px 10px 12px}
-      .media-actions{grid-template-columns:36px max-content 34px minmax(24px,1fr) 60px 36px;gap:4px}
+      .media-actions{grid-template-columns:36px max-content minmax(24px,1fr) 60px 36px;gap:4px}
       .media-actions .time{font-size:11px;letter-spacing:-.2px}
       .media-actions button,.media-actions select{padding:5px 2px}
     }
-    /* 极窄屏时稳定采用两行，而不是在播放状态切换时自动换行。 */
-    @media(max-width:335px){
-      .media-actions{grid-template-columns:36px max-content 34px minmax(24px,1fr);row-gap:8px}
-      #playbackRate{grid-column:3;grid-row:2}
-      #fullScreenInPlayer{grid-column:4;grid-row:2}
+    /* 仅在超窄屏固定使用两行，避免任何状态切换导致换行。 */
+    @media(max-width:300px){
+      .media-actions{grid-template-columns:36px max-content minmax(30px,1fr);row-gap:8px}
+      #playbackRate{grid-column:2;grid-row:2}
+      #fullScreenInPlayer{grid-column:3;grid-row:2}
     }
     .controls{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
     .controls-left,.controls-right{display:flex;align-items:center;gap:13px;flex-wrap:wrap}.controls small{color:var(--muted)}
@@ -89,7 +89,6 @@
         <div class="media-actions">
           <button id="playPause" type="button" aria-label="播放" title="播放">▶</button>
           <span class="time" id="timeDisplay">00:00 / 00:00</span>
-          <button id="mute" type="button" aria-label="静音或取消静音">🔊</button>
           <input id="volume" class="volume" type="range" min="0" max="1" value="1" step="0.05" aria-label="音量" />
           <select id="playbackRate" aria-label="播放倍速" title="播放倍速">
             <option value="0.5">0.5×</option>
@@ -252,14 +251,12 @@
   video.addEventListener('ratechange', () => {
     $('playbackRate').value = String(video.playbackRate);
   });
-  $('mute').addEventListener('click', () => { video.muted = !video.muted; });
   $('volume').addEventListener('input', () => {
     video.volume = Number($('volume').value);
     video.muted = video.volume === 0;
   });
   video.addEventListener('volumechange', () => {
-    $('mute').textContent = video.muted || video.volume === 0 ? '🔇' : '🔊';
-    $('volume').value = String(video.volume);
+    $('volume').value = String(video.muted ? 0 : video.volume);
   });
   // Esc 关闭 CSS 全屏，原生全屏由浏览器关闭。
   document.addEventListener('keydown', e => {
