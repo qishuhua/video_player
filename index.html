@@ -71,6 +71,36 @@
     .status{color:var(--muted);margin-top:13px;font-size:13px;min-height:19px;overflow-wrap:anywhere}
     .status:empty{display:none}.status.err{color:var(--red)}
     @media(max-width:680px){.shell{padding:14px 9px 40px}.top{margin:2px 8px 14px}h1{font-size:19px}.controls{padding:12px}}
+
+    /* 全屏：视频和 SVG 始终占满屏幕，播放栏只在底部唤出时浮现。 */
+    .player-stage:fullscreen,.player-stage:-webkit-full-screen,.player-stage.is-pseudo-fullscreen{
+      position:relative;display:block;overflow:hidden
+    }
+    .player-stage:fullscreen .frame,.player-stage:-webkit-full-screen .frame,.player-stage.is-pseudo-fullscreen .frame{
+      width:100%;height:100%;aspect-ratio:auto!important;flex:none
+    }
+    .player-stage:fullscreen .media-controls,.player-stage:-webkit-full-screen .media-controls,
+    .player-stage.is-pseudo-fullscreen .media-controls{
+      position:absolute;inset:auto 0 0;z-index:6;border-top:0;
+      padding-top:24px;background:linear-gradient(transparent,#091322ed 40%,#111e31);
+      visibility:hidden;opacity:0;transform:translateY(100%);pointer-events:none;
+      transition:opacity .18s ease,transform .18s ease,visibility .18s ease
+    }
+    .player-stage:fullscreen.controls-visible .media-controls,
+    .player-stage:-webkit-full-screen.controls-visible .media-controls,
+    .player-stage.is-pseudo-fullscreen.controls-visible .media-controls{
+      visibility:visible;opacity:1;transform:translateY(0);pointer-events:auto
+    }
+    .fullscreen-touch-zone{display:none}
+    @media(hover:none){
+      .player-stage:fullscreen .fullscreen-touch-zone,
+      .player-stage:-webkit-full-screen .fullscreen-touch-zone,
+      .player-stage.is-pseudo-fullscreen .fullscreen-touch-zone{
+        display:block;position:absolute;left:0;right:0;bottom:0;height:112px;z-index:4;
+        background:transparent;touch-action:manipulation
+      }
+      .player-stage.controls-visible .fullscreen-touch-zone{pointer-events:none}
+    }
   </style>
 </head>
 <body>
@@ -85,6 +115,7 @@
         <video id="video" preload="metadata" playsinline webkit-playsinline disablepictureinpicture></video>
         <img id="overlay" class="overlay" alt="检测区域与轨迹叠加图层" draggable="false" />
       </div>
+      <div id="fullscreenTouchZone" class="fullscreen-touch-zone" aria-hidden="true"></div>
       <div class="media-controls" aria-label="视频播放控制">
         <input id="seek" class="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="播放进度" />
         <div class="media-actions">
@@ -92,13 +123,9 @@
           <span class="time" id="timeDisplay">00:00 / 00:00</span>
           <select id="playbackRate" aria-label="播放倍速" title="播放倍速">
             <option value="0.5">0.5×</option>
-            <option value="0.75">0.75×</option>
             <option value="1" selected>1×</option>
-            <option value="1.25">1.25×</option>
-            <option value="1.5">1.5×</option>
             <option value="2">2×</option>
             <option value="3">3×</option>
-            <option value="4">4×</option>
           </select>
           <button id="fullScreenInPlayer" type="button" class="push" aria-label="进入全屏" title="进入全屏">⛶</button>
         </div>
@@ -122,9 +149,12 @@
   const overlay = $('overlay');
   const frame = $('frame');
   const playerStage = $('playerStage');
+  const mediaControls = playerStage.querySelector('.media-controls');
   const status = $('status');
   let pseudoFullscreen = false;
   let seeking = false;
+  let controlsPointerDown = false;
+  let touchHideTimer = null;
 
   function message(text, type = '') {
     status.textContent = text;
@@ -166,8 +196,60 @@
   });
   // 对视频与轨迹图层的共同父容器启用全屏。
   function isFullscreen() { return !!document.fullscreenElement || pseudoFullscreen; }
+
+  // 鼠标只有靠近下沿才唤出全屏播放栏；触屏可轻触底部区域。
+  function showFullscreenControls(show) {
+    playerStage.classList.toggle('controls-visible', isFullscreen() && show);
+  }
+  function clearTouchHideTimer() {
+    if (touchHideTimer !== null) clearTimeout(touchHideTimer);
+    touchHideTimer = null;
+  }
+  function scheduleTouchHide() {
+    clearTouchHideTimer();
+    touchHideTimer = setTimeout(() => {
+      if (!controlsPointerDown && !seeking) showFullscreenControls(false);
+      touchHideTimer = null;
+    }, 5000);
+  }
+  playerStage.addEventListener('pointermove', e => {
+    if (!isFullscreen() || e.pointerType === 'touch' || controlsPointerDown || seeking) return;
+    const bounds = playerStage.getBoundingClientRect();
+    const bottomRange = Math.max(100, mediaControls.offsetHeight + 28);
+    showFullscreenControls(e.clientY >= bounds.bottom - bottomRange && e.clientY <= bounds.bottom);
+  });
+  playerStage.addEventListener('pointerleave', () => {
+    if (!controlsPointerDown && !seeking) showFullscreenControls(false);
+  });
+  $('fullscreenTouchZone').addEventListener('pointerdown', e => {
+    if (!isFullscreen() || e.pointerType === 'mouse') return;
+    e.preventDefault();
+    showFullscreenControls(true);
+    scheduleTouchHide();
+  });
+  mediaControls.addEventListener('pointerdown', e => {
+    if (!isFullscreen()) return;
+    controlsPointerDown = true;
+    if (e.pointerType !== 'mouse') scheduleTouchHide();
+  });
+  document.addEventListener('pointerup', e => {
+    if (!controlsPointerDown) return;
+    controlsPointerDown = false;
+    if (isFullscreen() && e.pointerType !== 'mouse') scheduleTouchHide();
+  });
+  document.addEventListener('pointercancel', () => { controlsPointerDown = false; });
+  playerStage.addEventListener('pointerdown', e => {
+    if (isFullscreen() && e.pointerType !== 'mouse' && e.target === video) {
+      showFullscreenControls(false);
+      clearTouchHideTimer();
+    }
+  });
   function syncFullscreenButtons() {
     const full = isFullscreen();
+    if (!full) {
+      showFullscreenControls(false);
+      clearTouchHideTimer();
+    }
     const button = $('fullScreenInPlayer');
     const label = full ? '退出全屏' : '进入全屏';
     button.textContent = full ? '⤡' : '⛶';
@@ -175,6 +257,8 @@
     button.title = label;
   }
   async function toggleFullscreen() {
+    showFullscreenControls(false);
+    clearTouchHideTimer();
     if (pseudoFullscreen) {
       pseudoFullscreen = false;
       playerStage.classList.remove('is-pseudo-fullscreen');
