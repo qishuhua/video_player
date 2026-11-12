@@ -30,7 +30,11 @@
     .media-actions button:hover{background:#245080}
     .media-actions .time{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12px;text-align:center}
     .media-actions .push{margin-left:0}
-    .frame video{cursor:pointer;touch-action:manipulation}
+    /* 独立手势层避免 iOS WebKit 的 video 元素吞掉触摸事件。 */
+    .frame .gesture-layer{
+      position:absolute;inset:0;z-index:3;cursor:pointer;touch-action:manipulation;
+      -webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none
+    }
     /* 全屏整个播放器：视频与 SVG 保持同步缩放，控件仍位于画面外。 */
     .player-stage:fullscreen,.player-stage:-webkit-full-screen,.player-stage.is-pseudo-fullscreen{
       width:100vw!important;height:100vh!important;height:100dvh!important;
@@ -99,6 +103,8 @@
         <!-- 画面区域只显示视频与 SVG 轨迹，不覆盖播放控件。 -->
         <video id="video" preload="metadata" playsinline webkit-playsinline disablepictureinpicture></video>
         <img id="overlay" class="overlay" alt="检测区域与轨迹叠加图层" draggable="false" />
+        <div id="gestureLayer" class="gesture-layer" role="button" tabindex="0"
+             aria-label="视频画面：手机单击显示控制栏，双击播放或暂停"></div>
       </div>
       <div class="media-controls" aria-label="视频播放控制">
         <div class="media-actions">
@@ -132,6 +138,7 @@
   const video = $('video');
   const overlay = $('overlay');
   const frame = $('frame');
+  const gestureLayer = $('gestureLayer');
   const playerStage = $('playerStage');
   const mediaControls = playerStage.querySelector('.media-controls');
   const status = $('status');
@@ -205,7 +212,9 @@
     const bottomRange = Math.max(100, mediaControls.offsetHeight + 28);
     showFullscreenControls(e.clientY >= bounds.bottom - bottomRange && e.clientY <= bounds.bottom);
   });
-  playerStage.addEventListener('pointerleave', () => {
+  playerStage.addEventListener('pointerleave', e => {
+    // 触摸结束也可能派发 pointerleave，不能因此立刻关闭刚唤出的控件。
+    if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') return;
     if (!controlsPointerDown && !seeking) showFullscreenControls(false);
   });
   mediaControls.addEventListener('pointerdown', e => {
@@ -284,47 +293,57 @@
     else video.pause();
   }
   $('playPause').addEventListener('click', togglePlay);
-  // 触屏统一使用 pointerup 判断单击/双击，避免移动浏览器合成 click 后误触发播放。
-  // 按下/抬起坐标限制可过滤拖动手势，双击需在 320ms 内且相距不超过 48px。
-  function onTouchPointerDown(e) {
-    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-    touchStart = { id: e.pointerId, x: e.clientX, y: e.clientY, at: Date.now() };
-  }
-  function onTouchPointerUp(e) {
-    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+  // 用覆盖在视频上的透明手势层处理事件，iPhone 内置浏览器更可靠。
+  // 单击只唤出全屏控制栏；两次快速点击同一位置则播放/暂停。
+  gestureLayer.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) {
+      touchStart = null;
+      lastTouchTap = null;
+      return;
+    }
+    const t = e.changedTouches[0];
+    touchStart = { id: t.identifier, x: t.clientX, y: t.clientY, at: Date.now() };
+  }, { passive: true });
+  gestureLayer.addEventListener('touchend', e => {
+    // 禁止 Safari 合成 click，避免播放状态意外二次切换。
+    e.preventDefault();
     const now = Date.now();
     lastTouchReleaseAt = now;
-    const start = touchStart;
+    const t = e.changedTouches[0], start = touchStart;
     touchStart = null;
-    if (!start || start.id !== e.pointerId ||
-        now - start.at > 550 || Math.hypot(e.clientX - start.x, e.clientY - start.y) > 24) {
+    if (!t || e.touches.length !== 0 || !start || start.id !== t.identifier ||
+        now - start.at > 600 || Math.hypot(t.clientX - start.x, t.clientY - start.y) > 24) {
       lastTouchTap = null;
       return;
     }
     const doubleTap = lastTouchTap && now - lastTouchTap.at <= 320 &&
-      Math.hypot(e.clientX - lastTouchTap.x, e.clientY - lastTouchTap.y) <= 48;
+      Math.hypot(t.clientX - lastTouchTap.x, t.clientY - lastTouchTap.y) <= 48;
     if (doubleTap) {
       lastTouchTap = null;
       togglePlay();
     } else {
-      lastTouchTap = { at: now, x: e.clientX, y: e.clientY };
+      lastTouchTap = { at: now, x: t.clientX, y: t.clientY };
     }
     if (isFullscreen()) {
       showFullscreenControls(true);
       scheduleTouchHide();
     }
-  }
-  video.addEventListener('pointerdown', onTouchPointerDown);
-  video.addEventListener('pointerup', onTouchPointerUp);
-  video.addEventListener('pointercancel', () => { touchStart = null; lastTouchTap = null; });
-  video.addEventListener('click', e => {
+  }, { passive: false });
+  gestureLayer.addEventListener('touchcancel', () => {
+    touchStart = null;
+    lastTouchTap = null;
+  });
+  gestureLayer.addEventListener('click', e => {
     if (Date.now() - lastTouchReleaseAt < 800 || e.sourceCapabilities?.firesTouchEvents) return;
     togglePlay();
   });
-  video.addEventListener('dblclick', e => {
+  gestureLayer.addEventListener('dblclick', e => {
     e.preventDefault();
     if (Date.now() - lastTouchReleaseAt < 800 || e.sourceCapabilities?.firesTouchEvents) return;
     toggleFullscreen();
+  });
+  gestureLayer.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); togglePlay(); }
   });
   for (const ev of ['loadedmetadata', 'durationchange', 'timeupdate', 'seeked', 'emptied']) {
     video.addEventListener(ev, updateTimeline);
