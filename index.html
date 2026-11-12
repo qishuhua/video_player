@@ -30,7 +30,7 @@
     .media-actions button:hover{background:#245080}
     .media-actions .time{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12px;text-align:center}
     .media-actions .push{margin-left:0}
-    .frame video{cursor:pointer}
+    .frame video{cursor:pointer;touch-action:manipulation}
     /* 全屏整个播放器：视频与 SVG 保持同步缩放，控件仍位于画面外。 */
     .player-stage:fullscreen,.player-stage:-webkit-full-screen,.player-stage.is-pseudo-fullscreen{
       width:100vw!important;height:100vh!important;height:100dvh!important;
@@ -86,16 +86,6 @@
     .player-stage.is-pseudo-fullscreen.controls-visible .media-controls{
       visibility:visible;opacity:1;transform:translateY(0);pointer-events:auto
     }
-    .fullscreen-touch-zone{display:none}
-    @media(hover:none){
-      .player-stage:fullscreen .fullscreen-touch-zone,
-      .player-stage:-webkit-full-screen .fullscreen-touch-zone,
-      .player-stage.is-pseudo-fullscreen .fullscreen-touch-zone{
-        display:block;position:absolute;left:0;right:0;bottom:0;height:112px;z-index:4;
-        background:transparent;touch-action:manipulation
-      }
-      .player-stage.controls-visible .fullscreen-touch-zone{pointer-events:none}
-    }
   </style>
 </head>
 <body>
@@ -110,7 +100,6 @@
         <video id="video" preload="metadata" playsinline webkit-playsinline disablepictureinpicture></video>
         <img id="overlay" class="overlay" alt="检测区域与轨迹叠加图层" draggable="false" />
       </div>
-      <div id="fullscreenTouchZone" class="fullscreen-touch-zone" aria-hidden="true"></div>
       <div class="media-controls" aria-label="视频播放控制">
         <div class="media-actions">
           <button id="playPause" type="button" aria-label="播放" title="播放">▶</button>
@@ -150,6 +139,9 @@
   let seeking = false;
   let controlsPointerDown = false;
   let touchHideTimer = null;
+  let touchStart = null;
+  let lastTouchTap = null;
+  let lastTouchReleaseAt = 0;
 
   function message(text, type = '') {
     status.textContent = text;
@@ -192,7 +184,7 @@
   // 对视频与轨迹图层的共同父容器启用全屏。
   function isFullscreen() { return !!document.fullscreenElement || pseudoFullscreen; }
 
-  // 鼠标只有靠近下沿才唤出全屏播放栏；触屏可轻触底部区域。
+  // 鼠标靠近底边唤出全屏播放栏；触屏单击画面唤出、双击播放/暂停。
   function showFullscreenControls(show) {
     playerStage.classList.toggle('controls-visible', isFullscreen() && show);
   }
@@ -216,12 +208,6 @@
   playerStage.addEventListener('pointerleave', () => {
     if (!controlsPointerDown && !seeking) showFullscreenControls(false);
   });
-  $('fullscreenTouchZone').addEventListener('pointerdown', e => {
-    if (!isFullscreen() || e.pointerType === 'mouse') return;
-    e.preventDefault();
-    showFullscreenControls(true);
-    scheduleTouchHide();
-  });
   mediaControls.addEventListener('pointerdown', e => {
     if (!isFullscreen()) return;
     controlsPointerDown = true;
@@ -233,12 +219,6 @@
     if (isFullscreen() && e.pointerType !== 'mouse') scheduleTouchHide();
   });
   document.addEventListener('pointercancel', () => { controlsPointerDown = false; });
-  playerStage.addEventListener('pointerdown', e => {
-    if (isFullscreen() && e.pointerType !== 'mouse' && e.target === video) {
-      showFullscreenControls(false);
-      clearTouchHideTimer();
-    }
-  });
   function syncFullscreenButtons() {
     const full = isFullscreen();
     if (!full) {
@@ -304,8 +284,48 @@
     else video.pause();
   }
   $('playPause').addEventListener('click', togglePlay);
-  video.addEventListener('click', togglePlay);
-  video.addEventListener('dblclick', e => { e.preventDefault(); toggleFullscreen(); });
+  // 触屏统一使用 pointerup 判断单击/双击，避免移动浏览器合成 click 后误触发播放。
+  // 按下/抬起坐标限制可过滤拖动手势，双击需在 320ms 内且相距不超过 48px。
+  function onTouchPointerDown(e) {
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+    touchStart = { id: e.pointerId, x: e.clientX, y: e.clientY, at: Date.now() };
+  }
+  function onTouchPointerUp(e) {
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+    const now = Date.now();
+    lastTouchReleaseAt = now;
+    const start = touchStart;
+    touchStart = null;
+    if (!start || start.id !== e.pointerId ||
+        now - start.at > 550 || Math.hypot(e.clientX - start.x, e.clientY - start.y) > 24) {
+      lastTouchTap = null;
+      return;
+    }
+    const doubleTap = lastTouchTap && now - lastTouchTap.at <= 320 &&
+      Math.hypot(e.clientX - lastTouchTap.x, e.clientY - lastTouchTap.y) <= 48;
+    if (doubleTap) {
+      lastTouchTap = null;
+      togglePlay();
+    } else {
+      lastTouchTap = { at: now, x: e.clientX, y: e.clientY };
+    }
+    if (isFullscreen()) {
+      showFullscreenControls(true);
+      scheduleTouchHide();
+    }
+  }
+  video.addEventListener('pointerdown', onTouchPointerDown);
+  video.addEventListener('pointerup', onTouchPointerUp);
+  video.addEventListener('pointercancel', () => { touchStart = null; lastTouchTap = null; });
+  video.addEventListener('click', e => {
+    if (Date.now() - lastTouchReleaseAt < 800 || e.sourceCapabilities?.firesTouchEvents) return;
+    togglePlay();
+  });
+  video.addEventListener('dblclick', e => {
+    e.preventDefault();
+    if (Date.now() - lastTouchReleaseAt < 800 || e.sourceCapabilities?.firesTouchEvents) return;
+    toggleFullscreen();
+  });
   for (const ev of ['loadedmetadata', 'durationchange', 'timeupdate', 'seeked', 'emptied']) {
     video.addEventListener(ev, updateTimeline);
   }
