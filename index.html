@@ -20,16 +20,15 @@
     .frame .overlay.off{opacity:0!important}
     /* 普通模式：视频和轨迹单独占据画面，播放控件位于画面下方。 */
     .player-stage{background:#000}
-    .media-controls{position:relative;display:flex;flex-direction:column;gap:5px;
-      padding:8px 14px 12px;background:#152239;border-top:1px solid var(--line);color:#fff}
-    .media-controls .seek{width:100%;height:18px;min-width:0;cursor:pointer;accent-color:#56adff}
-    /* 无音频视频：四个固定控件，播放/暂停不会改变布局。 */
-    .media-actions{display:grid;grid-template-columns:42px max-content 68px 48px;justify-content:space-between;
-      align-items:center;gap:8px;min-height:40px}
+    .media-controls{position:relative;padding:9px 12px;background:#152239;border-top:1px solid var(--line);color:#fff}
+    /* 一行五个元素：播放、可伸缩进度条、时间、倍速、全屏。 */
+    .media-actions{display:grid;grid-template-columns:40px minmax(30px,1fr) max-content 64px 40px;
+      align-items:center;gap:8px;min-height:40px;min-width:0}
+    .media-actions .seek{width:100%;height:20px;min-width:0;margin:0;cursor:pointer;accent-color:#56adff}
     .media-actions button,.media-actions select{font:inherit;cursor:pointer;padding:5px 4px;background:#101b2d;
       border:1px solid #ffffff55;border-radius:7px;color:#fff;min-height:40px;min-width:0;width:100%}
     .media-actions button:hover{background:#245080}
-    .media-actions .time{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12px}
+    .media-actions .time{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12px;text-align:center}
     .media-actions .push{margin-left:0}
     .frame video{cursor:pointer}
     /* 全屏整个播放器：视频与 SVG 保持同步缩放，控件仍位于画面外。 */
@@ -48,18 +47,14 @@
     }
     body.lock-scroll{overflow:hidden}
     @media(max-width:520px){
-      .media-controls{padding:8px 10px 12px}
-      .media-actions{grid-template-columns:36px max-content 60px 36px;gap:4px}
+      .media-controls{padding:8px}
+      .media-actions{grid-template-columns:36px minmax(24px,1fr) max-content 54px 36px;gap:5px}
       .media-actions .time{font-size:11px;letter-spacing:-.2px}
       .media-actions button,.media-actions select{padding:5px 2px}
     }
-    /* 只在极窄屏固定采用两行，避免超出容器。 */
-    @media(max-width:260px){
-      .media-actions{grid-template-columns:36px minmax(0,1fr) 36px;row-gap:8px}
-      #playPause{grid-column:1;grid-row:1}
-      .media-actions .time{grid-column:2;grid-row:1;justify-self:center}
-      #playbackRate{grid-column:2;grid-row:2}
-      #fullScreenInPlayer{grid-column:3;grid-row:1}
+    @media(max-width:300px){
+      .media-actions{grid-template-columns:32px minmax(12px,1fr) max-content 48px 32px;gap:3px}
+      .media-actions .time{font-size:10px}
     }
     .controls{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
     .controls-left,.controls-right{display:flex;align-items:center;gap:13px;flex-wrap:wrap}.controls small{color:var(--muted)}
@@ -117,10 +112,10 @@
       </div>
       <div id="fullscreenTouchZone" class="fullscreen-touch-zone" aria-hidden="true"></div>
       <div class="media-controls" aria-label="视频播放控制">
-        <input id="seek" class="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="播放进度" />
         <div class="media-actions">
           <button id="playPause" type="button" aria-label="播放" title="播放">▶</button>
-          <span class="time" id="timeDisplay">00:00 / 00:00</span>
+          <input id="seek" class="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="播放进度" />
+          <span class="time" id="timeDisplay">00:00/00:00</span>
           <select id="playbackRate" aria-label="播放倍速" title="播放倍速">
             <option value="0.5">0.5×</option>
             <option value="1" selected>1×</option>
@@ -178,7 +173,7 @@
     $('dimensions').textContent = '视频尺寸：—';
     frame.style.aspectRatio = '16 / 9';
     $('seek').value = '0';
-    $('timeDisplay').textContent = '00:00 / 00:00';
+    $('timeDisplay').textContent = '00:00/00:00';
     updatePlayButton();
   }
   function loadSource(src, poster, svg) {
@@ -301,7 +296,7 @@
     const duration = video.duration;
     const current = video.currentTime || 0;
     if (!seeking) $('seek').value = Number.isFinite(duration) && duration > 0 ? String(Math.round(current / duration * 1000)) : '0';
-    $('timeDisplay').textContent = formatTime(current) + ' / ' + formatTime(duration);
+    $('timeDisplay').textContent = formatTime(current) + '/' + formatTime(duration);
   }
   function togglePlay() {
     if (!video.src) return;
@@ -322,7 +317,7 @@
     if (Number.isFinite(duration) && duration > 0) {
       seeking = true;
       video.currentTime = Number($('seek').value) / 1000 * duration;
-      $('timeDisplay').textContent = formatTime(video.currentTime) + ' / ' + formatTime(duration);
+      $('timeDisplay').textContent = formatTime(video.currentTime) + '/' + formatTime(duration);
     }
   });
   $('seek').addEventListener('change', () => { seeking = false; updateTimeline(); });
