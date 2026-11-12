@@ -1,0 +1,14 @@
+player.html
+  h_4ba6e213f37271 1-267
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "01e3ce20305fbb8babcc356201bf105b2cc4afc1",
+  "prompts": {},
+  "humans": {
+    "h_4ba6e213f37271": {
+      "author": "henry.qi <heny.qi@jtexpress.com>"
+    }
+  }
+}
