@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>H.265 WASM Player</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101319;color:#e9edf2;font:15px system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:24px 16px}h1{font-size:24px;margin:0 0 5px}p{color:#9ca8b7;margin:6px 0 16px}.source,.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}input,select,button{font:inherit;color:inherit;border:1px solid #404958;border-radius:6px;background:#202633;padding:8px}button{cursor:pointer}button:disabled{opacity:.45;cursor:default}#url{flex:1;min-width:180px}#file{max-width:100%}#panel{margin-top:16px;background:#080a0e;border:1px solid #303745;border-radius:8px;overflow:hidden}.stage{position:relative;display:grid;place-items:center;background:#000;min-height:180px;overflow:hidden}canvas{display:block;max-width:100%;max-height:72vh;width:auto;height:auto}.media{position:relative;max-width:100%;max-height:100%;line-height:0}#overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;object-fit:fill}.controls{padding:10px;background:#171b23;flex-wrap:nowrap}.controls input{flex:1;min-width:20px;padding:0;accent-color:#6ca4ff}#time{white-space:nowrap;font-variant-numeric:tabular-nums;font-size:13px}#status{min-height:25px;margin-top:12px;overflow-wrap:anywhere}.error{color:#ff9898}#panel:fullscreen,#panel.full{display:flex;flex-direction:column;background:black;border:0;border-radius:0;width:100%;height:100%;margin:0}#panel.full{position:fixed;inset:0;z-index:1000}#panel:fullscreen .stage,#panel.full .stage{flex:1;min-height:0}#panel:fullscreen canvas,#panel.full canvas{max-width:100vw;max-height:calc(100vh - 65px)}@media(max-width:600px){main{padding:12px}.controls{gap:5px;padding:6px}.controls button,.controls select{padding:5px}#time{font-size:11px}}
+</style>
+</head>
+<body><main>
+<h1>H.265 / H.264 WASM Player</h1>
+<p>FFmpeg CPU 软解 · 无插件 · 无服务端转码</p>
+<div class="source"><input id="url" type="url" placeholder="输入 MP4 视频 URL" aria-label="MP4 URL"><button id="load">加载</button><input id="file" type="file" accept="video/mp4,.mp4,.mov" aria-label="本地视频"></div>
+<div id="panel"><div class="stage"><div class="media"><canvas id="canvas" width="640" height="360"></canvas><img id="overlay" hidden alt=""></div></div>
+<div class="controls"><button id="play" disabled aria-label="播放或暂停">▶</button><input id="seek" type="range" min="0" max="0" step="0.01" value="0" disabled aria-label="播放进度"><span id="time">00:00 / 00:00</span><select id="speed" aria-label="播放倍速"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="3">3×</option></select><button id="full" aria-label="全屏">⛶</button></div></div>
+<p id="status" role="status">请选择本地视频或输入支持 CORS 的 MP4 地址。</p>
+<p id="info"></p><p>第一版面向短告警视频，最大 128 MiB，音频忽略。视频文件只在浏览器内解码；HTTP URL 需要允许跨域读取。10bit 视频转换为 8bit 显示。</p>
+</main><script type="module" src="./player.js"></script></body></html>
